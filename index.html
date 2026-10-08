@@ -11,13 +11,14 @@
 <div class="log" id="rewardTransactions" style="max-height:380px;color:#e4e8ef">لم يتم تحميل التحويلات بعد.</div>
 <p class="small">المبالغ المعروضة هي ما استقبله عنوان BTC على البلوكشين، وليست رصيد Binance الداخلي. يتم تحديثها كل دقيقتين والصفحة مفتوحة. فتح تفاصيل كل معاملة يتيح المقارنة مع سجل الإيداعات في Binance.</p>
 </section>
+<section class="card"><h2>⚙️ AUTO SOLO WORKERS</h2><div class="value green" id="workerCount">0 / 0</div><p class="small" id="autoInfo">AUTO: يجرب أعداداً مختلفة من العمال ويختار أعلى سرعة إجمالية. كل العمال يستخدمون نفس الآيفون ونفس محفظة SOLO.</p></section>
 <section class="card"><h2>MINING CONTROL</h2><button id="start" class="btn start">▶ START SOLO MINING</button><button id="stop" class="btn stop" disabled>■ STOP MINING</button></section>
 <section class="card"><h2>BEST BLOCK HASH</h2><div class="log" id="bestHash">—</div></section><section class="card"><h2>LIVE MINER LOG</h2><div class="log" id="log">SALEHBC ready. Waiting to connect.\n</div></section>
 <p class="warning">⚠️ هذا تعدين Bitcoin حقيقي تجريبي عند نجاح الاتصال واستلام مهام Stratum، وليس ضماناً للحصول على BTC. لا تُحتسب أي مكافأة إلا عند العثور على بلوك صالح وقبوله. احتمال ذلك على آيفون ضئيل للغاية. المتصفح قد يوقف التعدين عند قفل الشاشة أو الانتقال للخلفية. لا يُنصح بترك الهاتف يسخن.</p><footer>SALEHBC © 2026 • SOLO ONLY</footer></main>
 <script>
 'use strict';
 const POOL_BRIDGE='wss://salehbc-mining.alshama386.workers.dev/stratum';
-const $=id=>document.getElementById(id);let socket,miner,running=false,retry,reqId=0,subscribed=false,authorized=false,hasJob=false,accepted=0,pending=new Map(),started=0;
+const $=id=>document.getElementById(id);let socket,miners=[],running=false,retry,reqId=0,subscribed=false,authorized=false,hasJob=false,accepted=0,pending=new Map(),started=0,lastJob=null,lastExtra=null,lastDiff=10000,workerRates=new Map(),workerHashes=new Map(),workerBest=0,autoTimer=null,autoPhase=0,autoSamples=[],autoStarted=0,autoLimit=1,activeWorkers=0;
 const log=s=>{const l=$('log');l.textContent+='['+new Date().toLocaleTimeString('en-GB')+'] '+s+'\n';l.scrollTop=l.scrollHeight};
 const state=(s,ok=false)=>{$('state').textContent=s;$('state').className=ok?'green':'gold'};
 function rpc(method,params=[]){if(socket?.readyState!==WebSocket.OPEN)return;const id=++reqId;pending.set(id,method);socket.send(JSON.stringify({id,method,params}));return id}
@@ -25,20 +26,73 @@ function connect(){if(!running)return;state('Connecting to SOLO pool...');$('con
  socket.onopen=()=>{log('Bridge connected. Requesting Stratum subscription.');$('connection').textContent='BRIDGE ONLINE';rpc('mining.subscribe',['SALEHBC/3.0'])};
  socket.onmessage=e=>{let m;try{m=JSON.parse(e.data)}catch{return}if(m.bridge_error){log('Bridge: '+m.bridge_error);return}
   if(m.id!=null&&pending.has(m.id)){const method=pending.get(m.id);pending.delete(m.id);if(m.error){log(method+' rejected: '+JSON.stringify(m.error));return}
-   if(method==='mining.subscribe'){if(!Array.isArray(m.result)||m.result.length<3){log('Invalid subscribe response');return}subscribed=true;miner.postMessage({type:'extranonce',extra1:m.result[1],size:m.result[2]});log('Stratum subscribed; extranonce received');rpc('mining.authorize',['14c6FYanugodb4unhbXWrb2S6as4JbL4E5','x']);}
+   if(method==='mining.subscribe'){if(!Array.isArray(m.result)||m.result.length<3){log('Invalid subscribe response');return}subscribed=true;lastExtra={type:'extranonce',extra1:m.result[1],size:m.result[2]};broadcast(lastExtra);log('Stratum subscribed; extranonce received');rpc('mining.authorize',['14c6FYanugodb4unhbXWrb2S6as4JbL4E5','x']);}
    else if(method==='mining.authorize'){authorized=m.result===true;log(authorized?'SOLO authorization ACCEPTED':'SOLO authorization FAILED');$('connection').textContent=authorized?'POOL AUTHORIZED':'AUTH FAILED';state(authorized?'Authorized. Waiting for Bitcoin jobs':'Authorization failed',authorized)}
    else if(method==='mining.submit'){if(m.result===true){accepted++;$('accepted').textContent=accepted;log('SHARE ACCEPTED BY POOL')}else log('Share rejected')}
   }
-  if(m.method==='mining.set_difficulty'){const d=m.params?.[0];$('diff').textContent=String(d);miner.postMessage({type:'difficulty',value:d})}
-  if(m.method==='mining.notify'){const p=m.params;if(!Array.isArray(p)||p.length<9)return;const job={id:p[0],prevhash:p[1],coinb1:p[2],coinb2:p[3],branches:p[4],version:p[5],nbits:p[6],ntime:p[7],clean:p[8]};hasJob=true;miner.postMessage({type:'job',job});log('New live Bitcoin block template '+job.id);if(authorized){$('connection').textContent='POOL CONNECTED';state('REAL SOLO MINING • LIVE WORK',true)}}
+  if(m.method==='mining.set_difficulty'){const d=m.params?.[0];$('diff').textContent=String(d);lastDiff=d;broadcast({type:'difficulty',value:d})}
+  if(m.method==='mining.notify'){const p=m.params;if(!Array.isArray(p)||p.length<9)return;const job={id:p[0],prevhash:p[1],coinb1:p[2],coinb2:p[3],branches:p[4],version:p[5],nbits:p[6],ntime:p[7],clean:p[8]};hasJob=true;lastJob=job;broadcast({type:'job',job});log('New live Bitcoin block template '+job.id);if(authorized){$('connection').textContent='POOL CONNECTED';state('REAL SOLO MINING • LIVE WORK',true)}}
  };
- socket.onerror=()=>log('WebSocket error');socket.onclose=()=>{if(!running)return;subscribed=false;authorized=false;hasJob=false;miner.postMessage({type:'stop'});$('connection').textContent='DISCONNECTED';state('Disconnected. Reconnecting...');log('Connection closed; retrying in 5s');retry=setTimeout(()=>{if(running){miner.postMessage({type:'start'});connect()}},5000)};
+ socket.onerror=()=>log('WebSocket error');socket.onclose=()=>{if(!running)return;subscribed=false;authorized=false;hasJob=false;broadcast({type:'stop'});$('connection').textContent='DISCONNECTED';state('Disconnected. Reconnecting...');log('Connection closed; retrying in 5s');retry=setTimeout(()=>{if(running){broadcast({type:'start'});connect()}},5000)};
 }
-function start(){if(running)return;running=true;accepted=0;pending.clear();$('accepted').textContent='0';$('start').disabled=true;$('stop').disabled=false;started=Date.now();miner=new Worker('miner.js');miner.onmessage=e=>{const m=e.data;if(m.type==='progress'){$('rate').textContent=m.rate.toLocaleString()+' H/s';$('hashes').textContent=m.hashes.toLocaleString();const t=m.elapsed;$('time').textContent=[Math.floor(t/3600),Math.floor(t%3600/60),t%60].map(x=>String(x).padStart(2,'0')).join(':')}
- if(m.type==='best'){$('best').textContent=m.bits;$('bestHash').textContent=m.hash}
- if(m.type==='share'){if(authorized&&socket?.readyState===WebSocket.OPEN){rpc('mining.submit',m.params);log((m.block?'POTENTIAL BLOCK FOUND! ':'Share found; ')+'submitted to SOLO pool')}else log('Share found while offline; not submitted')}
- if(m.type==='error')log('Mining engine: '+m.message);if(m.type==='status')log(m.text)};miner.onerror=e=>log('Worker error: '+e.message);miner.postMessage({type:'start'});log('Starting Bitcoin double SHA-256 engine');connect()}
-function stop(){running=false;clearTimeout(retry);try{socket?.close()}catch{}try{miner?.postMessage({type:'stop'});miner?.terminate()}catch{}$('start').disabled=false;$('stop').disabled=true;$('connection').textContent='OFFLINE';$('rate').textContent='0 H/s';state('Stopped');log('Stopped by user')}
+function broadcast(m){for(const w of miners)w.postMessage(m)}
+function totalRate(){return Array.from(workerRates.values()).reduce((a,b)=>a+b,0)}
+function renderMining(){
+ $('rate').textContent=totalRate().toLocaleString()+' H/s';
+ $('hashes').textContent=Array.from(workerHashes.values()).reduce((a,b)=>a+b,0).toLocaleString();
+ const t=Math.floor((Date.now()-started)/1000);$('time').textContent=[Math.floor(t/3600),Math.floor(t%3600/60),t%60].map(x=>String(x).padStart(2,'0')).join(':');
+ $('workerCount').textContent=activeWorkers+' / '+autoLimit;
+}
+function setWorkers(n){
+ n=Math.max(1,Math.min(autoLimit,Math.floor(n)));if(!running)return;
+ for(const w of miners)try{w.terminate()}catch{}
+ miners=[];workerRates.clear();workerHashes.clear();activeWorkers=n;
+ for(let i=0;i<n;i++){
+  const w=new Worker('miner.js');miners.push(w);
+  w.onmessage=e=>{if(!running)return;const m=e.data;
+   if(m.type==='progress'){workerRates.set(i,m.rate);workerHashes.set(i,m.hashes);renderMining()}
+   if(m.type==='best'&&m.bits>workerBest){workerBest=m.bits;$('best').textContent=m.bits;$('bestHash').textContent=m.hash}
+   if(m.type==='share'){if(authorized&&socket?.readyState===WebSocket.OPEN){rpc('mining.submit',m.params);log((m.block?'POTENTIAL BLOCK FOUND! ':'Share found; ')+'submitted to SOLO pool')}else log('Share found while offline; not submitted')}
+   if(m.type==='error')log('Worker '+(i+1)+': '+m.message);
+  };
+  w.onerror=e=>log('Worker '+(i+1)+' error: '+e.message);
+  w.postMessage({type:'start',index:i,count:n});
+  if(lastExtra)w.postMessage(lastExtra);
+  w.postMessage({type:'difficulty',value:lastDiff});
+  if(lastJob)w.postMessage({type:'job',job:lastJob});
+ }
+ renderMining();
+}
+// AUTO benchmarks small worker counts, then keeps the fastest aggregate hashrate.
+// Re-benchmarking is intentionally avoided to limit phone heat and battery drain.
+const candidateCounts=limit=>[1,2,4,8].filter(x=>x<=limit);
+function startAuto(){
+ const candidates=candidateCounts(autoLimit);autoPhase=0;autoSamples=[];
+ const measure=()=>{
+  if(!running)return;
+  if(autoPhase>0){autoSamples.push({count:candidates[autoPhase-1],rate:totalRate()});}
+  if(autoPhase>=candidates.length){
+   const best=autoSamples.reduce((a,b)=>b.rate>a.rate?a:b,autoSamples[0]);
+   setWorkers(best.count);
+   $('autoInfo').textContent='AUTO اختار '+best.count+' عامل؛ أعلى سرعة مقاسة '+Math.round(best.rate).toLocaleString()+' H/s. راقب حرارة الجهاز.';
+   log('AUTO selected '+best.count+' workers (benchmark '+Math.round(best.rate)+' H/s)');return;
+  }
+  const count=candidates[autoPhase++];setWorkers(count);
+  $('autoInfo').textContent='AUTO يجرب '+count+' عامل من '+autoLimit+' كحد أعلى...';
+  autoTimer=setTimeout(measure,9000);
+ };
+ measure();
+}
+function start(){
+ if(running)return;running=true;accepted=0;pending.clear();$('accepted').textContent='0';$('start').disabled=true;$('stop').disabled=false;started=Date.now();workerBest=0;lastJob=null;lastExtra=null;lastDiff=10000;
+ autoLimit=Math.min(8,Math.max(1,Number(navigator.hardwareConcurrency)||4));
+ log('Starting AUTO SOLO workers (max '+autoLimit+')');startAuto();connect();
+}
+function stop(){
+ running=false;clearTimeout(retry);clearTimeout(autoTimer);try{socket?.close()}catch{}
+ for(const w of miners)try{w.terminate()}catch{}miners=[];workerRates.clear();workerHashes.clear();activeWorkers=0;
+ $('start').disabled=false;$('stop').disabled=true;$('connection').textContent='OFFLINE';$('rate').textContent='0 H/s';$('workerCount').textContent='0 / '+autoLimit;state('Stopped');log('Stopped by user');
+}
 // Blockchain receipts are independent of the mining connection. Never infer a solved block from incoming transfers.
 const BTC_ADDRESS='14c6FYanugodb4unhbXWrb2S6as4JbL4E5';
 const CHAIN_API='https://blockstream.info/api';
