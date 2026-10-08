@@ -230,11 +230,11 @@ button:disabled {
     <div class="logo-icon">₿</div>
     <h1>SALEHBC</h1>
     <div class="subtitle">BITCOIN SOLO LOTTERY MINER</div>
-    <div class="badge">⚡ SHA-256 TEST ENGINE v1.1</div>
+    <div class="badge">⚡ SHA-256 VERIFIED TEST v2.0</div>
   </div>
 
   <div class="card">
-    <div class="card-title">LIVE HASHRATE</div>
+    <div class="card-title">LIVE HASHRATE — LOCAL SHA-256 TEST</div>
 
     <div class="hashrate">
       <span id="hashrate">0.00</span>
@@ -243,7 +243,7 @@ button:disabled {
 
     <div class="status">
       <span class="dot" id="dot"></span>
-      <span id="status">MINER STOPPED</span>
+      <span id="status">TEST STOPPED</span>
     </div>
   </div>
 
@@ -295,7 +295,7 @@ button:disabled {
     >
 
     <div class="note" style="margin-top:10px">
-      Wallet is saved locally. No BTC payments are sent.
+      Saved only on this device. Not registered with any pool. No BTC rewards in test mode.
     </div>
   </div>
 
@@ -322,11 +322,11 @@ button:disabled {
   </div>
 
   <div class="card">
-    <div class="card-title">MINER LOG</div>
+    <div class="card-title">TEST LOG</div>
 
     <div class="hash-box" id="log">
       SALEHBC ready.<br>
-      Local SHA-256 test engine initialized.
+      Waiting for verified SHA-256 self-test.
     </div>
   </div>
 
@@ -431,8 +431,8 @@ function updateDisplay() {
 function createMinerWorker() {
   const code = `
     let active = false;
-    let nonce = 0;
     let verified = false;
+    let nonce = 0;
     let bestZeros = 0;
     let bestHash = "";
 
@@ -536,6 +536,14 @@ function createMinerWorker() {
       return out;
     }
 
+    // Known-answer test (SHA-256 of 32 zero bytes).
+    // A real Bitcoin miner additionally needs double-SHA256 on valid
+    // 80-byte block headers and authenticated pool work submission.
+    function selfTest() {
+      const expected = "66687aadf862bd776c8fc18b8e9f8e20089714856ee233b3902a591d0d5f2925";
+      return toHex(sha256(new Uint8Array(32))) === expected;
+    }
+
     function toHex(bytes) {
       return Array.from(bytes)
         .map(b => b.toString(16).padStart(2,"0"))
@@ -593,6 +601,9 @@ function createMinerWorker() {
 
     onmessage = function(e) {
       if (e.data === "start") {
+        verified = selfTest();
+        postMessage({type: "selftest", passed: verified});
+        if (!verified) return;
         active = true;
         mineBatch();
       }
@@ -632,6 +643,15 @@ function startMining() {
   lastRateTime = performance.now();
 
   worker.onmessage = function(e) {
+    if (e.data.type === "selftest") {
+      if (e.data.passed) {
+        addLog("SHA-256 self-test passed (32-byte known-answer test)");
+      } else {
+        addLog("SHA-256 self-test FAILED — hashing stopped");
+        stopMining();
+      }
+      return;
+    }
     if (e.data.type === "progress") {
       totalHashes += e.data.count;
 
