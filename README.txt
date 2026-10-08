@@ -1,21 +1,25 @@
-SALEHBC v2 — verified local SHA-256 benchmark and status API
+SALEHBC SOLO - Experimental Bitcoin solo mining on iPhone
 
-WHAT IS INCLUDED
-- index.html: standalone iPhone-friendly local SHA-256 test page with known-answer self-test.
-- worker.js: Cloudflare status API only (not a mining gateway).
-- wrangler.jsonc: Cloudflare Worker deployment config.
+FILES: index.html, miner.js, worker.js, wrangler.jsonc
 
-INSTALL (existing GitHub repo -salehbc)
-1. Replace index.html in the repository with the index.html in this ZIP.
-2. Keep worker.js and wrangler.jsonc as-is if already present; included here for completeness.
-3. Wait for GitHub Pages to publish, open the page and press START HASHING.
-4. Look for "SHA-256 self-test passed" in TEST LOG.
+DEPLOYMENT (existing GitHub repo alshama386/-salehbc):
+1. Replace/add all four files at repo ROOT on branch main in ONE commit.
+2. GitHub Pages serves index.html and miner.js. Cloudflare's existing GitHub deployment uses wrangler.jsonc and worker.js.
+3. Wait for both deployments. Open https://alshama386.github.io/-salehbc/ and press START SOLO MINING.
+4. A genuine pool connection is confirmed ONLY if screen shows POOL CONNECTED, and log says SOLO authorization ACCEPTED and New live Bitcoin block template.
+5. If Cloudflare build fails, inspect deployment logs; don't assume connected.
 
-IMPORTANT LIMITATIONS
-This is NOT Bitcoin block mining and cannot win Bitcoin rewards. It hashes synthetic
-32-byte test data with SHA-256, not live Bitcoin 80-byte headers/double-SHA256.
-The Worker is a status API only. Actual solo mining requires a Stratum-compatible
-persistent TCP gateway, valid block templates and submission, plus a mining engine.
-Cloudflare Workers alone do not provide a persistent Stratum TCP gateway.
-The public GitHub Pages website is not private. Do not put secrets in source code.
-Using an exchange deposit address for mining rewards should be confirmed with the exchange.
+SOLO CKPOOL: stratum.ckpool.org:3333, fee 2% (per pool website).
+FIXED PAYOUT ADDRESS: 14c6FYanugodb4unhbXWrb2S6as4JbL4E5
+CAUTION: This is a Binance exchange deposit address. Binance acceptance of direct mining rewards is UNVERIFIED. For safety, verify first with Binance or use a self-custody wallet instead.
+
+IMPORTANT LIMITATIONS:
+- This code has NOT been end-to-end tested against live CKPool or on the user's iPhone.
+- This is an experimental reference implementation, not guaranteed reliable mining software.
+- Browser SubtleCrypto is very slow; Safari may throttle/stop background tabs or lock screen.
+- A high-difficulty share may take years or longer on phone; zero accepted shares is expected.
+- A real block payout is extremely unlikely; no rewards are promised.
+- Public GitHub Pages and workers.dev URLs are NOT PRIVATE. Authentication is not included.
+- The Cloudflare bridge is fixed to one pool and one wallet, and accepts WebSocket connections from any origin. It is publicly accessible; consider Cloudflare Access / rate limiting before public use.
+- This release does NOT alter q8quiz.com or the existing quiz site.
+- If this is to be used seriously, perform live integration tests and security review first.
