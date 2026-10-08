@@ -230,7 +230,7 @@ button:disabled {
     <div class="logo-icon">₿</div>
     <h1>SALEHBC</h1>
     <div class="subtitle">BITCOIN SOLO LOTTERY MINER</div>
-    <div class="badge">⚡ SHA-256 ENGINE v1.0</div>
+    <div class="badge">⚡ SHA-256 TEST ENGINE v1.1</div>
   </div>
 
   <div class="card">
@@ -432,6 +432,7 @@ function createMinerWorker() {
   const code = `
     let active = false;
     let nonce = 0;
+    let verified = false;
     let bestZeros = 0;
     let bestHash = "";
 
