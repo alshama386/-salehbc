@@ -3,6 +3,14 @@
 <section class="card"><h2>LIVE BITCOIN HASHRATE</h2><div class="value" id="rate">0 H/s</div><p id="state" class="gold">غير متصل</p></section>
 <div class="grid"><section class="card"><h2>TOTAL HASHES</h2><div class="value" id="hashes">0</div></section><section class="card"><h2>MINING TIME</h2><div class="value" id="time">00:00:00</div></section><section class="card"><h2>BEST ZERO BITS</h2><div class="value gold" id="best">0</div></section><section class="card"><h2>POOL DIFFICULTY</h2><div class="value" id="diff">—</div></section><section class="card"><h2>POOL CONNECTION</h2><div class="value" id="connection">OFFLINE</div></section><section class="card"><h2>ACCEPTED SHARES</h2><div class="value green" id="accepted">0</div></section></div>
 <section class="card"><h2>SOLO PAYOUT ADDRESS • BTC MAINNET</h2><div class="value" style="font-size:16px;direction:ltr;text-align:left" id="wallet">14c6FYanugodb4unhbXWrb2S6as4JbL4E5</div><p class="small">العنوان مثبت في خادم الاتصال ولا يمكن تغييره من المتصفح. يجب التأكد من قبول Binance مكافآت التعدين المباشرة.</p></section>
+<section class="card" id="rewardsPanel"><h2>🏆 SOLO BLOCKS &amp; BTC REWARDS • ON-CHAIN</h2>
+<p class="small">يعرض معاملات عنوان الاستلام المثبت على شبكة Bitcoin. المعاملة الواردة ليست بالضرورة مكافأة تعدين. لا نعتبر أي بلوك مكتشفاً بواسطة SALEHBC إلا بدليل من المجمع أو سلسلة الكتل.</p>
+<div class="grid"><section class="card"><h2>VERIFIED SOLO BLOCKS</h2><div class="value" id="soloBlocks">غير متحقق</div></section><section class="card"><h2>CONFIRMED RECEIVED</h2><div class="value green" id="confirmedBtc">— BTC</div></section><section class="card"><h2>PENDING RECEIVED</h2><div class="value gold" id="pendingBtc">— BTC</div></section><section class="card"><h2>CONFIRMED TX COUNT</h2><div class="value" id="confirmedCount">—</div></section></div>
+<p class="small" id="rewardStatus" role="status">اضغط تحديث لقراءة بيانات البلوكشين.</p>
+<button class="btn start" id="refreshRewards" type="button">↻ تحديث المكافآت والتحويلات</button>
+<div class="log" id="rewardTransactions" style="max-height:380px;color:#e4e8ef">لم يتم تحميل التحويلات بعد.</div>
+<p class="small">المبالغ المعروضة هي ما استقبله عنوان BTC على البلوكشين، وليست رصيد Binance الداخلي. يتم تحديثها كل دقيقتين والصفحة مفتوحة. فتح تفاصيل كل معاملة يتيح المقارنة مع سجل الإيداعات في Binance.</p>
+</section>
 <section class="card"><h2>MINING CONTROL</h2><button id="start" class="btn start">▶ START SOLO MINING</button><button id="stop" class="btn stop" disabled>■ STOP MINING</button></section>
 <section class="card"><h2>BEST BLOCK HASH</h2><div class="log" id="bestHash">—</div></section><section class="card"><h2>LIVE MINER LOG</h2><div class="log" id="log">SALEHBC ready. Waiting to connect.\n</div></section>
 <p class="warning">⚠️ هذا تعدين Bitcoin حقيقي تجريبي عند نجاح الاتصال واستلام مهام Stratum، وليس ضماناً للحصول على BTC. لا تُحتسب أي مكافأة إلا عند العثور على بلوك صالح وقبوله. احتمال ذلك على آيفون ضئيل للغاية. المتصفح قد يوقف التعدين عند قفل الشاشة أو الانتقال للخلفية. لا يُنصح بترك الهاتف يسخن.</p><footer>SALEHBC © 2026 • SOLO ONLY</footer></main>
@@ -31,5 +39,45 @@ function start(){if(running)return;running=true;accepted=0;pending.clear();$('ac
  if(m.type==='share'){if(authorized&&socket?.readyState===WebSocket.OPEN){rpc('mining.submit',m.params);log((m.block?'POTENTIAL BLOCK FOUND! ':'Share found; ')+'submitted to SOLO pool')}else log('Share found while offline; not submitted')}
  if(m.type==='error')log('Mining engine: '+m.message);if(m.type==='status')log(m.text)};miner.onerror=e=>log('Worker error: '+e.message);miner.postMessage({type:'start'});log('Starting Bitcoin double SHA-256 engine');connect()}
 function stop(){running=false;clearTimeout(retry);try{socket?.close()}catch{}try{miner?.postMessage({type:'stop'});miner?.terminate()}catch{}$('start').disabled=false;$('stop').disabled=true;$('connection').textContent='OFFLINE';$('rate').textContent='0 H/s';state('Stopped');log('Stopped by user')}
+// Blockchain receipts are independent of the mining connection. Never infer a solved block from incoming transfers.
+const BTC_ADDRESS='14c6FYanugodb4unhbXWrb2S6as4JbL4E5';
+const CHAIN_API='https://blockstream.info/api';
+let rewardLoading=false;
+const btc=sat=>(sat/100000000).toFixed(8);
+function el(tag,content){const n=document.createElement(tag);if(content!==undefined)n.textContent=content;return n}
+async function getJSON(url){const r=await fetch(url,{cache:'no-store',headers:{'Accept':'application/json'}});if(!r.ok)throw Error('HTTP '+r.status);return r.json()}
+async function refreshRewards(){
+ if(rewardLoading)return;rewardLoading=true;const btn=$('refreshRewards');btn.disabled=true;
+ $('rewardStatus').textContent='جاري جلب بيانات Bitcoin mainnet...';
+ try{
+  const [addr,txs]=await Promise.all([getJSON(CHAIN_API+'/address/'+BTC_ADDRESS),getJSON(CHAIN_API+'/address/'+BTC_ADDRESS+'/txs')]);
+  if(!addr?.chain_stats||!Array.isArray(txs))throw Error('Invalid blockchain response');
+  const confirmed=addr.chain_stats.funded_txo_sum||0;
+  const pending=addr.mempool_stats?.funded_txo_sum||0;
+  $('confirmedBtc').textContent=btc(confirmed)+' BTC';
+  $('pendingBtc').textContent=btc(pending)+' BTC';
+  $('confirmedCount').textContent=String(addr.chain_stats.tx_count||0);
+  const box=$('rewardTransactions');box.replaceChildren();
+  const title=el('div','أحدث المعاملات الواردة إلى العنوان (حتى 25 مؤكدة + المعلقة):');box.append(title);
+  let shown=0;
+  for(const tx of txs){
+   const outs=(tx.vout||[]).filter(o=>o.scriptpubkey_address===BTC_ADDRESS);
+   const sats=outs.reduce((a,o)=>a+(o.value||0),0);if(!sats)continue;shown++;
+   const row=el('div');row.style.cssText='border-top:1px solid #303949;padding:12px 0';
+   const status=tx.status?.confirmed?'مؤكدة على الشبكة':'معلقة - غير مؤكدة';
+   const coinbase=Array.isArray(tx.vin)&&tx.vin.some(v=>v.is_coinbase);
+   row.append(el('div',btc(sats)+' BTC | '+status+(coinbase?' | Coinbase transaction (يحتاج إثبات ملكية البلوك)':'')));
+   const link=el('a','عرض المعاملة: '+tx.txid.slice(0,18)+'…');
+   link.href='https://blockstream.info/tx/'+encodeURIComponent(tx.txid);link.target='_blank';link.rel='noopener noreferrer';
+   link.style.cssText='color:#e9b84e;display:block;overflow-wrap:anywhere';row.append(link);box.append(row);
+  }
+  if(!shown)box.append(el('div','لا توجد معاملات واردة في أحدث السجلات المعروضة.'));
+  $('rewardStatus').textContent='آخر تحديث: '+new Date().toLocaleString('ar-KW')+' — بيانات عامة من شبكة Bitcoin. لا يمكن تأكيد إيداع Binance من هنا.';
+ }catch(e){$('rewardStatus').textContent='تعذّر تحديث البيانات: '+e.message+' — لم يتم تغيير الأرقام السابقة. حاول مجدداً.'}
+ finally{rewardLoading=false;btn.disabled=false}
+}
+$('refreshRewards').onclick=refreshRewards;
+setInterval(()=>{if(!document.hidden)refreshRewards()},120000);
+refreshRewards();
 $('start').onclick=start;$('stop').onclick=stop;document.addEventListener('visibilitychange',()=>{if(document.hidden&&running)log('WARNING: browser background; mining may pause')});
 </script></body></html>
