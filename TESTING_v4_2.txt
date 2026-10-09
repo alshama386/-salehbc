@@ -1,0 +1,1 @@
+SALEHBC v4.2: offline SHA256d genesis-block vector test added. Open site and press TEST SHA-256d (OFFLINE). PASS checks genesis hash and target only; it does NOT prove valid Stratum share submissions, Binance acceptance, or profitability. GitHub HTML/miner.js only changed; Cloudflare worker.js unchanged. Zero shares at high difficulty is expected.

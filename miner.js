@@ -1,4 +1,8 @@
 const W='bridge-enforced-identity';
+// Self-test is offline: never sends test shares to a real mining pool.
+
+// Self-test is offline: never sends test shares to a real mining pool.
+
 const hex=b=>Array.from(b,x=>x.toString(16).padStart(2,'0')).join('');
 const bytes=h=>new Uint8Array(h.match(/../g)?.map(x=>parseInt(x,16))||[]);
 const rev=h=>h.match(/../g).reverse().join('');
@@ -32,7 +36,27 @@ async function mine(task){
   }
  }
 }
+async function selfTest(){
+ // Bitcoin genesis header, nonce 2083236893. Independently published hash.
+ const headerHex='01000000'+'00'.repeat(32)+'3ba3edfd7a7b12b27ac72c3e67768f617fc81bc3888a51323a9fb8aa4b1e5e4a'+'29ab5f49'+'ffff001d'+'1dac2b7c';
+ const got=hex((await dbl(bytes(headerHex))).reverse());
+ const expected='000000000019d6689c085ae165831e934ff763ae46a2a6c172b3f1b60a8ce26f';
+ const target=bitsTarget('1d00ffff');
+ const ok=got===expected && BigInt('0x'+got)<=target;
+ notify('selftest',{ok,got,expected,details:ok?'Genesis SHA256d + byte order + compact target PASS':'Genesis vector or target FAILED'});
+}
+async function selfTest(){
+ // Bitcoin genesis header, nonce 2083236893. Independently published hash.
+ const headerHex='01000000'+'00'.repeat(32)+'3ba3edfd7a7b12b27ac72c3e67768f617fc81bc3888a51323a9fb8aa4b1e5e4a'+'29ab5f49'+'ffff001d'+'1dac2b7c';
+ const got=hex((await dbl(bytes(headerHex))).reverse());
+ const expected='000000000019d6689c085ae165831e934ff763ae46a2a6c172b3f1b60a8ce26f';
+ const target=bitsTarget('1d00ffff');
+ const ok=got===expected && BigInt('0x'+got)<=target;
+ notify('selftest',{ok,got,expected,details:ok?'Genesis SHA256d + byte order + compact target PASS':'Genesis vector or target FAILED'});
+}
 onmessage=e=>{const m=e.data;
+ if(m.type==='selftest'){selfTest().catch(err=>notify('selftest',{ok:false,details:String(err)}));return;}
+ if(m.type==='selftest'){selfTest().catch(err=>notify('selftest',{ok:false,details:String(err)}));return;}
  if(m.type==='start'){running=true;workerIndex=Number(m.index)||0;workerCount=Math.max(1,Number(m.count)||1);extra2=BigInt(workerIndex);hashes=0;best=0;started=performance.now();notify('status',{text:'Waiting for live pool work'});if(job)mine(job).catch(err=>notify('error',{message:String(err)}))}
  if(m.type==='stop'){running=false;job=null;notify('status',{text:'Stopped'})}
  if(m.type==='extranonce'){extra1=m.extra1;extra2Size=m.size;}
