@@ -1,7 +1,8 @@
-SALEHBC LOTTERY 50 v3.4
+SALEHBC v4.0 HYBRID
 
-Upload index.html, miner.js, portrait.jpg, worker.js, wrangler.jsonc to the SAME GitHub repository. Do not change other projects.
-
-Lottery mode ramps 1,2,4,8,12,16,24,32,40,50 workers after a pool job arrives, pausing 16 seconds at each stage. It may stop earlier if aggregate throughput falls sharply. Each worker has a different extranonce2 sequence. The 50 workers share one phone processor; they do NOT create 50 independent devices or 50x odds. No thermal sensor is available to the web app; stop if phone gets hot.
-
-Pool authorization and live job messages are not proof of a valid accepted share. Accepted shares must be confirmed by CKPool. Binance deposit address direct coinbase payout compatibility must be checked independently.
+GitHub Pages: upload index.html, miner.js, portrait.jpg, README.md, README.txt, worker.js, wrangler.jsonc.
+IMPORTANT: GitHub Pages deploy does NOT update Cloudflare Worker. You MUST separately deploy worker.js in your existing Cloudflare Worker salehbc-mining. Keep its public URL unchanged.
+Modes: SOLO CKPool, POOL Binance (salehbc.001), HYBRID 50/50. Each browser/device stores its own mode.
+Pool rewards from Binance Pool go to the Funding wallet of the Binance mining account; SOLO payout is the specified Bitcoin address.
+No shares have been verified as accepted. A successful authorization is NOT proof of accepted shares. The browser cannot stay mining reliably in background.
+NOTE: 50 web workers share one CPU; no guarantee of better odds.

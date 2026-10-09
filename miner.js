@@ -1,4 +1,4 @@
-const W='14c6FYanugodb4unhbXWrb2S6as4JbL4E5';
+const W='bridge-enforced-identity';
 const hex=b=>Array.from(b,x=>x.toString(16).padStart(2,'0')).join('');
 const bytes=h=>new Uint8Array(h.match(/../g)?.map(x=>parseInt(x,16))||[]);
 const rev=h=>h.match(/../g).reverse().join('');
