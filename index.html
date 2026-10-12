@@ -80,7 +80,23 @@ function setWorkers(n){n=Math.max(1,Math.min(50,n));const counts=plan(n);for(con
 function render(){const rate=miners.reduce((a,x)=>a+(x.rate||0),0),hashes=totalDone+miners.reduce((a,x)=>a+(x.hashes||0),0);$('rate').textContent=rate.toLocaleString()+' H/s';$('hashes').textContent=hashes.toLocaleString();const btcRate=miners.filter(x=>groupCoin(x.kind)==='btc').reduce((a,x)=>a+(x.rate||0),0);const ltcRate=miners.filter(x=>groupCoin(x.kind)==='ltc').reduce((a,x)=>a+(x.rate||0),0);$('coinStats').textContent='BTC: '+btcRate.toLocaleString()+' H/s • LTC: '+ltcRate.toLocaleString()+' H/s (local estimates)';const t=running?Math.floor((Date.now()-started)/1000):0;$('time').textContent=[Math.floor(t/3600),Math.floor(t%3600/60),t%60].map(x=>String(x).padStart(2,'0')).join(':')}
 function ramp(){if(!running)return;const n=stages[stage++];if(!n){autoTimer=null;$('autoInfo').textContent='MINING running '+desired+' workers. Monitor device temperature.';return}try{setWorkers(n)}catch(e){log('Worker limit '+e);autoTimer=null;return}$('autoInfo').textContent='MINING '+n+'/50 • '+mode.toUpperCase()+' • same device CPU';autoTimer=setTimeout(ramp,16000)}
 async function start(){if(running)return;mode=selectedMode();coinMode=selectedCoin();const coins=coinMode==='both'?['btc','ltc']:[coinMode],methods=mode==='both'?['solo','pool']:[mode],keys=coins.flatMap(c=>methods.map(m=>c+'_'+m));
- await loadBridgeConfig();if(!bridgeConfig){state('تعذر التحقق من Cloudflare Worker',false);alert('لم يتم التحقق من نسخة Cloudflare Worker. تأكد من نشر worker.js v5.3.1 ثم أعد المحاولة.');return}const missing=keys.filter(k=>!bridgeConfig?.targets?.[k]?.configured);if(missing.length){state('لا يمكن التشغيل: إعدادات المجمع ناقصة',false);log('NOT CONFIGURED: '+missing.join(', '));alert('القنوات غير مُعدّة: '+missing.join(', ')+'\nSOLO يحتاج Worker حديثًا، وPOOL يحتاج إعدادات مجمع دفع حقيقي في Cloudflare. لا يمكن تشغيل قنوات وهمية.');return}
+ await loadBridgeConfig();if(!bridgeConfig){state('تعذر التحقق من Cloudflare Worker',false);alert('لم يتم التحقق من نسخة Cloudflare Worker. تأكد من نشر worker.js v5.3.1 ثم أعد المحاولة.');return}const missing=keys.filter(k=>!bridgeConfig?.targets?.[k]?.configured);if(missing.length){
+  state('قنوات غير مُعدّة: '+missing.join(', '),false);
+  log('NOT CONFIGURED: '+missing.join(', '));
+  const soloKeys=coins.map(c=>c+'_solo');
+  const soloReady=soloKeys.every(k=>bridgeConfig?.targets?.[k]?.configured);
+  if(mode!=='solo'&&soloReady){
+    const proceed=confirm('قنوات POOL غير مُعدّة: '+missing.join(', ')+'\n\nهل تبي تشغّل SOLO فقط للعملات المختارة الآن؟\n\nملاحظة: لن يبدأ تعدين POOL ولن تظهر أرباح جماعية قبل ربط مجمع حقيقي.');
+    if(!proceed)return;
+    mode='solo';
+    document.querySelector('input[name="mode"][value="solo"]').checked=true;
+    keys.splice(0,keys.length,...soloKeys);
+    log('USER CONFIRMED SOLO ONLY fallback; POOL NOT RUNNING');
+  }else{
+    alert('القنوات غير مُعدّة: '+missing.join(', ')+'\n\nلا يمكن تشغيل هذه القنوات قبل إعدادها في Cloudflare.');
+    return;
+  }
+ }
  running=true;localStorage.setItem('salehbc-mode',mode);localStorage.setItem('salehbc-coin',coinMode);started=Date.now();totalDone=0;best=0;stage=0;groups={};$('best').textContent='0';$('bestHash').textContent='—';$('start').disabled=true;$('stop').disabled=false;document.querySelectorAll('input[name="mode"],input[name="coinMode"]').forEach(x=>x.disabled=true);
  for(const key of keys)groups[key]=makeGroup(key);setWorkers(Math.max(1,keys.length));groupState();$('diagLog').textContent='';log('SALEHBC v5.3.1 starting '+keys.join(' + '));state('Connecting...');for(const g of Object.values(groups))connectGroup(g)}
 function stop(){running=false;clearTimeout(autoTimer);autoTimer=null;for(const g of Object.values(groups)){clearTimeout(g.retry);try{g.ws?.close()}catch{}}for(const x of miners)try{x.w.terminate()}catch{}miners=[];groups={};totalDone=0;stage=0;$('start').disabled=false;$('stop').disabled=true;document.querySelectorAll('input[name="mode"],input[name="coinMode"]').forEach(x=>x.disabled=false);$('rate').textContent='0 H/s';$('coinStats').textContent='BTC: 0 H/s • LTC: 0 H/s';$('workerCount').textContent='0 / 50';$('connection').textContent='OFFLINE';$('binanceStatus').textContent='OFFLINE';state('Stopped');log('Stopped')}
