@@ -11,7 +11,7 @@ const dbl=async b=>new Uint8Array(await crypto.subtle.digest('SHA-256',await cry
 const diff1=BigInt('0x00000000ffff0000000000000000000000000000000000000000000000000000');
 function bitsTarget(bits){const n=parseInt(bits.slice(0,2),16),m=BigInt('0x'+bits.slice(2));return n<=3?m>>BigInt(8*(3-n)):m<<BigInt(8*(n-3))}
 const leNum=(n,len)=>{let s='';for(let i=0;i<len;i++){s+=(n&255).toString(16).padStart(2,'0');n=Math.floor(n/256)}return s};
-let running=false,job=null,extra1='',extra2Size=4,difficulty=10000,extra2=0n,hashes=0,best=0,activeTask=0,started=0,workerIndex=0,workerCount=1;
+let running=false,job=null,extra1='',extra2Size=4,difficulty=10000,extra2=0n,hashes=0,best=0,activeTask=0,started=0,workerIndex=0,workerCount=1,lastQuality=0;
 const notify=(type,data={})=>postMessage({type,...data});
 async function mine(task){
  let localHashes=0, last=performance.now(),lastTick=performance.now();
@@ -28,6 +28,7 @@ async function mine(task){
    hashes++;localHashes++;
    const zeroBits=hashLE===0n?256:256-hashLE.toString(2).length;
    if(zeroBits>best){best=zeroBits;notify('best',{bits:best,hash:hex(hash.slice().reverse())})}
+   if(zeroBits>=16&&performance.now()-lastQuality>=1000){lastQuality=performance.now();notify('quality',{bits:zeroBits})}
    if(hashLE<=diff1/BigInt(Math.max(1,Math.floor(difficulty)))||hashLE<=blockTarget){
     notify('share',{params:[W,task.id,x2,task.ntime,nonce.toString(16).padStart(8,'0')],block:hashLE<=blockTarget,hash:hex(hash.slice().reverse())});
    }
