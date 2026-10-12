@@ -1,11 +1,12 @@
 import { connect } from 'cloudflare:sockets';
 const SOLO_WALLET='14c6FYanugodb4unhbXWrb2S6as4JbL4E5';
 const LTC_WALLET='LZF3fP4bx51A4b2bfca7Ut7YNDUnoKkBH3';
-const TARGETS={solo:{host:'stratum.ckpool.org',port:3333,user:SOLO_WALLET},pool:{host:'eu.litesolo.org',port:3333,user:LTC_WALLET+'.SALEHBC'}};
-export default {async fetch(request){
- const url=new URL(request.url);const mode=url.searchParams.get('mode')==='pool'?'pool':'solo';const target=TARGETS[mode];
- if(url.pathname==='/status')return Response.json({project:'SALEHBC',version:'5.0',mode,host:target.host,port:target.port,worker:target.user,connected:false},{headers:{'Access-Control-Allow-Origin':'*','Cache-Control':'no-store'}});
- if(url.pathname!=='/stratum'||request.headers.get('Upgrade')?.toLowerCase()!=='websocket')return new Response('SALEHBC v5.0 websocket /stratum?mode=solo|pool',{status:400});
+const BASE_TARGETS={btc_solo:{host:'stratum.ckpool.org',port:3333,user:SOLO_WALLET},ltc_solo:{host:'eu.litesolo.org',port:3333,user:LTC_WALLET+'.SALEHBC'}};
+function targets(env){const out={...BASE_TARGETS};for(const coin of ['BTC','LTC']){const host=env?.[coin+'_POOL_HOST'],port=Number(env?.[coin+'_POOL_PORT']),user=env?.[coin+'_POOL_USER'];if(host&&Number.isInteger(port)&&port>0&&port<=65535&&user)out[coin.toLowerCase()+'_pool']={host,port,user};}return out;}
+export default {async fetch(request,env){
+ const url=new URL(request.url);const mode=url.searchParams.get('mode')||'btc_solo';const all=targets(env);const target=all[mode];
+ if(url.pathname==='/status')return Response.json({project:'SALEHBC',version:'5.3',targets:Object.fromEntries(['btc_solo','ltc_solo','btc_pool','ltc_pool'].map(k=>[k,{configured:!!all[k],host:all[k]?.host||null}])),connected:false},{headers:{'Access-Control-Allow-Origin':'*','Cache-Control':'no-store'}});
+ if(url.pathname!=='/stratum'||request.headers.get('Upgrade')?.toLowerCase()!=='websocket')return new Response('SALEHBC v5.3 /stratum?mode=btc_solo|ltc_solo|btc_pool|ltc_pool',{status:400});if(!target)return new Response('Mining target not configured',{status:503});
  const [client,server]=Object.values(new WebSocketPair());server.accept();let tcp,writer,reader,closed=false,buffer='';
  const send=o=>{try{server.send(typeof o==='string'?o:JSON.stringify(o))}catch{}};
  const shutdown=()=>{if(closed)return;closed=true;try{reader?.cancel()}catch{}try{writer?.releaseLock()}catch{}try{tcp?.close()}catch{}try{server.close(1000,'Closed')}catch{}};
