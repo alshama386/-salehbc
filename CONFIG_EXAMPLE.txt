@@ -1,0 +1,10 @@
+# مثال إعدادات فقط — الملف لا يحمّل تلقائياً من الخادم. أضف القيم كمتغيرات بيئة في استضافتك.
+DGB_WALLET=D88AHivqzm3tyrfyUmc8qhv5pKzG2S3eLN
+POOL_HOST=digibyte.sololuck.io
+POOL_PORT=3341
+POOL_TLS=0
+WORKER_NAME=SALEHBC
+HOST=127.0.0.1
+PORT=8787
+# To allow LAN access: HOST=0.0.0.0 and set a strong DASHBOARD_TOKEN
+DASHBOARD_TOKEN=

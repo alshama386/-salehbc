@@ -177,7 +177,7 @@ function startMining(){
  conn.on(POOL_TLS ? 'secureConnect' : 'connect',()=>{
    if(thisRun!==runId)return;
    current.connected=true;current.status='authenticating';
-   sendRpc('mining.subscribe',['SALEHBC-DGB/1.0'], r=>{
+   sendRpc('mining.subscribe',['SALEHBC-DGB/1.1'], r=>{
      if(r.error||!Array.isArray(r.result)||r.result.length<3){logError('Subscribe rejected: '+JSON.stringify(r.error||r.result));conn.destroy();return;}
      extranonce1=r.result[1];extranonce2Size=Number(r.result[2]);
      if(!isHex(extranonce1,extranonce1.length)||!Number.isInteger(extranonce2Size)||extranonce2Size<1||extranonce2Size>16){logError('Invalid subscription extranonce');conn.destroy();return;}
@@ -241,7 +241,8 @@ const MIME={'.html':'text/html;charset=utf-8','.js':'text/javascript;charset=utf
 function reply(res,status,obj){res.writeHead(status,{'Content-Type':'application/json; charset=utf-8','Cache-Control':'no-store','X-Content-Type-Options':'nosniff'});res.end(JSON.stringify(obj));}
 function tokenAllowed(req){if(!TOKEN)return true;return req.headers['x-dashboard-token'] === TOKEN;}
 function handleBody(req,res,callback){let raw='';req.on('data',chunk=>{raw+=chunk.toString();if(raw.length>10000){req.destroy();}});req.on('end',()=>{try{callback(JSON.parse(raw||'{}'));}catch(e){reply(res,400,{ok:false,error:'invalid JSON'});}});}
-const root=path.join(__dirname,'public');
+// Flat repository: HTML, assets, server, and tests are all in one root directory.
+const root=__dirname;
 const server=http.createServer((req,res)=>{
  const url=new URL(req.url,'http://localhost');
  if(url.pathname.startsWith('/api/')){
